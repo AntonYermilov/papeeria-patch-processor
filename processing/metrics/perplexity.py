@@ -8,7 +8,7 @@ from nltk.lm.preprocessing import padded_everygram_pipeline, pad_both_ends
 from nltk.util import ngrams
 
 
-class NGramModel:
+class NGramPerplexityScorer:
     def __init__(self):
         self.model = None
         self.order = None
@@ -28,6 +28,8 @@ class NGramModel:
                 'model': self.model,
                 'order': self.order
             }
+            if not path.parent.exists():
+                path.parent.mkdir(parents=True)
             with path.open('wb') as model_path:
                 pickle.dump(model, model_path)
 

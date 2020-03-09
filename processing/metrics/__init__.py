@@ -2,6 +2,7 @@ import numpy as np
 from nltk import word_tokenize
 
 from .levenshtein import levenshtein
+from .perplexity import NGramPerplexityScorer
 
 
 def char_edit_distance(sent1: str, sent2: str, no_digits=False, summarized=True):
