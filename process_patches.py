@@ -59,7 +59,8 @@ def main():
 
     processor.print_statistics()
 
-    sentence_pairs = select_sentence_pairs(sentence_pairs, sent_regex=r'^[A-Z][^%$\\&^~]*$',
+    sent_regex = r'^[A-Z][a-zA-Z!@#№*()\[\]{}\-_+=;:\',.<>?/ ]*[.?!;]$'
+    sentence_pairs = select_sentence_pairs(sentence_pairs, sent_regex=sent_regex,
                                            min_length=20, max_length=500,
                                            min_char_levenshtein=1, max_char_levenshtein=20,
                                            min_alpha_ratio=0.65)
