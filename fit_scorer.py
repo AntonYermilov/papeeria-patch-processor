@@ -17,4 +17,4 @@ if __name__ == '__main__':
     parser.add_argument('--order', type=int, default=5)
     parser.add_argument('--model-path', type=str, default='resources/ppl_scorers/ngram_model.pkl')
     args = parser.parse_args()
-    main(args.dataset_path, args.model_path, args.order)
+    main(Path(args.dataset_path), Path(args.model_path), args.order)
