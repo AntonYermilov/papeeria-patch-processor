@@ -1,7 +1,5 @@
-[
-  {
-    "project_name": null,
-    "bucket_name": null,
-    "download_folder": "resources"
-  }
-]
+{
+  "project_name": null,
+  "bucket_name": null,
+  "download_folder": "resources"
+}

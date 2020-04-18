@@ -85,8 +85,7 @@ class BucketLoader:
             self._store_data(self._get_version_path(version), patch_list.SerializeToString())
         self._store_data(self._get_content_path(versions[-1]), versions[-1].content)
 
-    # noinspection PyBroadException
-    def load(self) -> bool:
+    def load(self, continue_from_blob: Optional[str] = None) -> bool:
         current_date = datetime.now().strftime('%Y.%m.%d %H.%M.%S')
         file_name = f'loader {current_date}.log'
         set_log_handler(logger=self.logger, file_name=file_name)
@@ -101,18 +100,44 @@ class BucketLoader:
 
         for last_blob in client.list_blobs(bucket, versions=False):
             last_blob: Blob
-            self.logger.info(f'Downloading versions of object {bucket.name}/{last_blob.name}')
+
+            if last_blob.name.endswith('/') or (continue_from_blob and last_blob.name < continue_from_blob):
+                continue
+
+            self.logger.info(f'Downloading versions of object {last_blob.name}')
             try:
-                new_versions = []
+                versions = []
                 for blob in client.list_blobs(bucket, prefix=last_blob.name, versions=True):
+                    self.logger.info(blob.name)
                     file_version = self._parse_version(blob)
                     object_path = self._get_version_path(file_version)
-                    if not object_path.exists():
-                        new_versions.append(file_version)
+                    self.logger.info(
+                        f'fileId={file_version.fileId}, timestamp={file_version.timestamp}, object_path={object_path}')
+                    versions.append(file_version)
 
-                if new_versions:
-                    self._process_versions(new_versions)
-                self.logger.info(f'{len(new_versions)} new versions of object {bucket.name}/{last_blob.name} found')
+                new_versions = 0
+                versions_to_load = []
+                for version in sorted(versions, key=lambda v: -v.timestamp):
+                    object_path = self._get_version_path(version)
+                    new_versions += not object_path.exists()
+                    versions_to_load.append(version)
+                    if object_path.exists():
+                        break
+
+                """
+                We also load the last version among those that are already loaded as it could have been damaged.
+                For example, due to an unexpected interrupt of a loader script.
+                """
+                for version in reversed(versions_to_load):
+                    object_path = self._get_version_path(version)
+                    patch_list = PatchList(patches=version.patches)
+                    self._store_data(object_path, patch_list.SerializeToString())
+
+                if versions_to_load:
+                    self._store_data(self._get_content_path(versions_to_load[0]), versions_to_load[0].content)
+
+                self.logger.info(f'{new_versions} new versions of object {last_blob.name} found')
+
             except Exception as error:
                 self.logger.error(f'An unexpected error occurred while downloading objects '
                                   f'from bucket {bucket.name}: {error}')
@@ -120,37 +145,22 @@ class BucketLoader:
         return True
 
 
-class Loader:
-    def __init__(self):
-        self.buckets: List[BucketLoader] = []
-
-    def add_bucket(self, project_name: str, bucket_name: str, download_folder: str) -> None:
-        self.buckets.append(BucketLoader(project_name=project_name,
-                                         bucket_name=bucket_name,
-                                         download_folder=download_folder))
-
-    def load(self) -> None:
-        for bucket_loader in self.buckets:
-            bucket_loader.load()
-
-
 def main():
-    default_download_folder = str(Path('resources', 'patches'))
+    default_download_folder = str(Path('resources'))
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='config.json')
+    parser.add_argument('--continue-from-blob', help='blod id to continue from', type=str, default=None)
     args = parser.parse_args()
 
     config = json.loads(Path(args.config).read_bytes())
 
-    loader = Loader()
-    for desc in config:
-        loader.add_bucket(
-            project_name=desc.get('project_name'),
-            bucket_name=desc.get('bucket_name'),
-            download_folder=desc.get('download_folder', default_download_folder)
-        )
-    loader.load()
+    loader = BucketLoader(
+        project_name=config.get('project_name'),
+        bucket_name=config.get('bucket_name'),
+        download_folder=config.get('download_folder', default_download_folder)
+    )
+    loader.load(args.continue_from_blob)
 
 
 if __name__ == '__main__':
