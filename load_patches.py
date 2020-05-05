@@ -106,6 +106,12 @@ class BucketLoader:
 
             self.logger.info(f'Downloading versions of object {last_blob.name}')
             try:
+                last_version = self._parse_version(last_blob)
+                object_path = self._get_version_path(last_version)
+                if object_path.exists():
+                    self.logger.info('No new versions found')
+                    continue
+
                 versions = []
                 for blob in client.list_blobs(bucket, prefix=last_blob.name, versions=True):
                     self.logger.info(blob.name)

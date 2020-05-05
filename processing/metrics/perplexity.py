@@ -21,6 +21,7 @@ class NGramPerplexityScorer:
         print('Fitting n-gram model', file=sys.stderr)
         self.model.fit(train_data, padded_sents)
         print(f'Vocabulary size: {self.model.vocab}', file=sys.stderr)
+        return self
 
     def save(self, path: Path):
         if self.model:
@@ -32,12 +33,14 @@ class NGramPerplexityScorer:
                 path.parent.mkdir(parents=True)
             with path.open('wb') as model_path:
                 pickle.dump(model, model_path)
+        return self
 
     def load(self, path: Path):
         with path.open('rb') as model_path:
             model = pickle.load(model_path)
             self.model = model['model']
             self.order = model['order']
+        return self
 
     def perplexity(self, sent: str):
         text = pad_both_ends(sent, n=self.order)

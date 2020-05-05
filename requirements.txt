@@ -8,3 +8,6 @@ langdetect==1.0.8
 pycountry==19.8.18
 regex==2020.2.20
 tqdm==4.43.0
+ray==0.8.3
+psutil==5.7.0
+pandas==1.0.3

@@ -4,7 +4,7 @@ from typing import List, Tuple
 from tqdm import tqdm
 from langdetect import detect
 
-from .metrics import char_edit_distance, word_edit_distance, latin_alphabet_ratio
+from .metrics import char_edit_distance, word_edit_distance, latin_alphabet_ratio, NGramPerplexityScorer
 
 
 class SentencePair:
@@ -27,7 +27,7 @@ class SentencePair:
               f'target sentence: {self.target_sent}\n'
               f'metrics: char_levenshtein={self.char_distance}, alpha_ratio={self.alpha_ratio:.3f}, '
               f'S={self.word_substitutions}, I={self.word_insertions}, D={self.word_deletions}, '
-              f'source_ppl={self.source_perplexity}, target_ppl={self.target_perplexity}\n')
+              f'source_ppl={self.source_perplexity:.8f}, target_ppl={self.target_perplexity:.8f}\n')
 
 
 def is_probably_english(sent: str):
@@ -40,7 +40,8 @@ def is_probably_english(sent: str):
 def select_sentence_pairs(sentence_pairs: List[Tuple[str, str]], sent_regex: str = None,
                           min_length: int = None, max_length: int = None,
                           min_char_levenshtein: int = None, max_char_levenshtein: int = None,
-                          min_alpha_ratio: float = None) -> List[SentencePair]:
+                          min_alpha_ratio: float = None,
+                          perplexity_scorer: NGramPerplexityScorer = None) -> List[SentencePair]:
     if not min_length:
         min_length = 0
     if not max_length:
@@ -61,7 +62,7 @@ def select_sentence_pairs(sentence_pairs: List[Tuple[str, str]], sent_regex: str
         sent_regex = re.compile(sent_regex)
         sentence_pairs = filter(lambda pair: sent_regex.fullmatch(pair[0]) and sent_regex.fullmatch(pair[1]), sentence_pairs)
 
-    sentence_pairs = map(lambda pair: SentencePair(*pair), sentence_pairs)
+    sentence_pairs = map(lambda pair: SentencePair(*pair, perplexity_scorer=perplexity_scorer), sentence_pairs)
 
     print(f'Filtering sentence pairs by levenshtein distance [{min_char_levenshtein}, {max_char_levenshtein}]', file=sys.stderr)
     sentence_pairs = filter(lambda sp: min_char_levenshtein <= sp.char_distance <= max_char_levenshtein, sentence_pairs)
@@ -72,7 +73,7 @@ def select_sentence_pairs(sentence_pairs: List[Tuple[str, str]], sent_regex: str
     print('Filtering english sentences', file=sys.stderr)
     sentence_pairs = filter(lambda sp: is_probably_english(sp.source_sent) or is_probably_english(sp.target_sent), sentence_pairs)
 
-    sentence_pairs = list(tqdm(sentence_pairs))
+    sentence_pairs = list(sentence_pairs)
 
     print('Done', file=sys.stderr)
     return sentence_pairs
