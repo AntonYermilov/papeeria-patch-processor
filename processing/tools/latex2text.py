@@ -53,7 +53,7 @@ class Prerequisites(EnvList):
 
 
 class Equations(EnvList):
-    def __init__(self, replacement=' _MATH_ '):
+    def __init__(self, replacement=' MATH '):
         self.replacement = replacement
         super().__init__([
             LatexEnv(r'align', args=None, repl=replacement),
@@ -77,7 +77,7 @@ class Equations(EnvList):
 
 
 class Cites(EnvList):
-    def __init__(self, replacement=' _CITE_ '):
+    def __init__(self, replacement=' CITE '):
         self.replacement = replacement
         super().__init__([
             LatexEnv(r'\\cite(\[.*?\])?\{.*?\}', args=None, repl=replacement, use_raw_regex=True),
@@ -100,7 +100,7 @@ class Headings(EnvList):
 
 
 class Figures(EnvList):
-    def __init__(self, replacement=' _FIGURE_ '):
+    def __init__(self, replacement=' FIGURE '):
         self.replacement = replacement
         super().__init__([
             LatexEnv(r'figure', args=None, repl=replacement),
@@ -111,7 +111,7 @@ class Figures(EnvList):
 
 
 class Tables(EnvList):
-    def __init__(self, replacement=' _TABLE_ '):
+    def __init__(self, replacement=' TABLE '):
         self.replacement = replacement
         super().__init__([
             LatexEnv(r'table', args=None, repl=replacement),
@@ -164,7 +164,7 @@ class Comments(EnvList):
 class Commands(EnvList):
     def __init__(self):
         super().__init__([
-            LatexEnv(r'\\(eq|foot)?ref\{.*?\}', args=None, repl=r' ', use_raw_regex=True),
+            LatexEnv(r'\\(eq|foot)?ref\{.*?\}', args=None, repl=r' REF ', use_raw_regex=True),
             LatexEnv(r'\\rule\{.*?\}\{.*?\}', args=None, repl=r' ', use_raw_regex=True),
             LatexEnv(r'\\label\{.*?\}', args=None, repl=r' ', use_raw_regex=True),
             LatexEnv(r'\\paragraph\*?\{.*?\}', args=None, repl=r' ', use_raw_regex=True),
@@ -186,6 +186,12 @@ class OtherEnvs(EnvList):
             LatexEnv(r'\\begin\{(.*?)\}(.*?)\\end\{\1\}', args=None, repl=r' \2 ', use_raw_regex=True),
             LatexEnv(r'\\item\[(.*?)\]', args=None, repl=r' \1 ', use_raw_regex=True),
             LatexEnv(r'\\item', args=None, repl=r' ', use_raw_regex=True),
+            LatexEnv(r'[fF][iI][gG]\.', args=None, repl=r' figure ', use_raw_regex=True),
+            LatexEnv(r'\\includegraphics\[.*?\]\{.*?\}', args=None, repl=r' ', use_raw_regex=True),
+            LatexEnv(r'\\input\{.*?\}', args=None, repl=r' ', use_raw_regex=True),
+            LatexEnv(r'\\underline\{(.*?)\}', args=None, repl=r' \1 ', use_raw_regex=True),
+            LatexEnv(r'\\centering\{(.*?)\}', args=None, repl=r' \1 ', use_raw_regex=True),
+            LatexEnv(r'\\[a-zA-Z]+(\[.*?\]|\{.*?\})*?', args=None, repl=r' ', use_raw_regex=True)
         ])
 
     def replace_all(self, text: str, apply_once: bool = True) -> str:

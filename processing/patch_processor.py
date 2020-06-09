@@ -3,9 +3,10 @@ import sys
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Optional, Iterable
 from diff_match_patch import patch_obj, diff_match_patch
-from nltk import sent_tokenize
+from nltk import sent_tokenize, word_tokenize
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 import ray
+import numpy as np
 
 from .patch import merge_patches, invert_patches
 from .tools.latex2text import LatexMarkupProcessor
@@ -13,7 +14,7 @@ from cosmas.generated.cosmas_pb2 import Patch
 
 
 SIMILARITY_DISTANCE = 10
-TIMESTAMP_DISTANCE = 3000  # milliseconds
+TIMESTAMP_DISTANCE = 15000  # milliseconds
 
 
 def group_similar_patches_by_distance(patches: List[patch_obj]) -> List[List[patch_obj]]:
@@ -36,20 +37,55 @@ def group_similar_patches_by_distance(patches: List[patch_obj]) -> List[List[pat
     return similar_patches
 
 
-def group_similar_patches_by_timestamps(patches: List[patch_obj], timestamps: List[int]) -> List[List[patch_obj]]:
+def group_similar_patches_by_timestamps_and_distance(patches: List[patch_obj], timestamps: List[int]) -> List[List[patch_obj]]:
     i, j = 0, 1
     similar_patches = []
     while i < len(patches):
-        while j < len(patches) and timestamps[j - 1] - timestamps[j] <= TIMESTAMP_DISTANCE:
-            j += 1
+        while j < len(patches):
+            if timestamps[j - 1] - timestamps[j] <= TIMESTAMP_DISTANCE:
+                j += 1
+                continue
+
+            begin1, end1 = patches[j - 1].start2, patches[j - 1].start2 + patches[j - 1].length2
+            begin2, end2 = patches[j].start1, patches[j].start1 + patches[j].length1
+            distance = max(begin2 - end1, begin1 - end2)
+
+            if distance <= SIMILARITY_DISTANCE:
+                j += 1
+                continue
+            break
+
         similar_patches.append(patches[i:j])
         i, j = j, j + 1
     return similar_patches
 
 
+def sent_join(sents: List[str]):
+    new_sents = []
+
+    i = 0
+    sents.append('')
+    while i < len(sents):
+        if sents[i].endswith('e.g.') or sents[i].endswith('i.e.') or sents[i].endswith('et al.'):
+            new_sents.append(sents[i] + ' ' + sents[i + 1])
+            i += 2
+        else:
+            new_sents.append(sents[i])
+            i += 1
+
+    return new_sents
+
+
+def sent_normalize(sent: str) -> str:
+    return ' '.join(word_tokenize(sent))
+
+
 def extract_one_diff(text_before: str, text_after: str) -> Optional[Tuple[str, str]]:
-    sents_before = list(filter(lambda sent: len(sent) >= 5, sent_tokenize(text_before)))
-    sents_after = list(filter(lambda sent: len(sent) >= 5, sent_tokenize(text_after)))
+    text_before = ' '.join(filter(len, text_before.split()))
+    text_after = ' '.join(filter(len, text_after.split()))
+
+    sents_before = list(filter(lambda sent: len(sent) >= 5, sent_join(sent_tokenize(text_before))))
+    sents_after = list(filter(lambda sent: len(sent) >= 5, sent_join(sent_tokenize(text_after))))
 
     prefix_len = 0
     while prefix_len < min(len(sents_before), len(sents_after)) and sents_before[prefix_len] == sents_after[prefix_len]:
@@ -69,8 +105,11 @@ def extract_one_diff(text_before: str, text_after: str) -> Optional[Tuple[str, s
 
 
 def extract_multiple_diffs(text_before: str, text_after: str) -> List[Tuple[str, str]]:
-    sents_before = list(filter(lambda sent: len(sent) >= 5, sent_tokenize(text_before)))
-    sents_after = list(filter(lambda sent: len(sent) >= 5, sent_tokenize(text_after)))
+    text_before = ' '.join(filter(len, text_before.split()))
+    text_after = ' '.join(filter(len, text_after.split()))
+
+    sents_before = list(map(sent_normalize, filter(lambda sent: len(sent) >= 5, sent_join(sent_tokenize(text_before)))))
+    sents_after = list(map(sent_normalize, filter(lambda sent: len(sent) >= 5, sent_join(sent_tokenize(text_after)))))
 
     n, m = len(sents_before), len(sents_after)
     if abs(n - m) > 10:
@@ -89,6 +128,7 @@ def extract_multiple_diffs(text_before: str, text_after: str) -> List[Tuple[str,
                 has_equal = True
 
         if has_equal:
+            i += 1
             continue
 
         best_j, best_bleu = None, None
@@ -114,6 +154,9 @@ def extract_multiple_diffs(text_before: str, text_after: str) -> List[Tuple[str,
             sent_before = ' '.join(sents_before[i:i + di + 1])
             for dj in range(-1, 2):
                 if best_j + dj < 0 or best_j + dj >= m:
+                    continue
+
+                if sents_before[i + di] == sents_after[best_j + dj]:
                     continue
 
                 j1, j2 = min(best_j, best_j + dj), max(best_j, best_j + dj)
@@ -175,10 +218,38 @@ class MultipleDiffExtractor(DiffExtractor):
         return self.diffs.copy()
 
 
+class ArticleDetector:
+    def __init__(self):
+        self.markup_processor = LatexMarkupProcessor()
+        self.bibtex_regex = re.compile(r'@(article|book|conference|inproceedings|masterthesis|online|phdthesis|techreport|unpublished)')
+        self.beamer_regex = re.compile(r'\\begin\{frame\}.*?\\end\{frame\}')
+
+    def is_probably_article(self, text: str) -> bool:
+        if self.bibtex_regex.search(text) is not None or self.beamer_regex.search(text):
+            return False
+
+        text = self.markup_processor.remove_markup(text)
+        text = ' '.join(filter(len, text.split()))
+        sents = sent_join(sent_tokenize(text))
+
+        lens = []
+        for i in range(len(sents)):
+            sent = sents[i]
+            sent = sent.replace('MATH', '').replace('CITE', '').replace('FIGURE', '').replace('TABLE', '').replace('REF', '')
+            if len(sent) >= 5 and len(sent) > 0.66 * len(sents[i]):
+                lens.append(len(sent))
+
+        if len(lens) >= 30:
+            lens = np.array(lens)
+            return np.median(lens) >= 40
+        else:
+            return False
+
+
 class AdvancedPatchProcessor:
     def __init__(self, num_cpus):
         self.patcher = diff_match_patch()
-        self.bibtex_regex = re.compile(r'@(article|book|conference|inproceedings|masterthesis|online|phdthesis|techreport|unpublished)')
+        self.article_detector = ArticleDetector()
 
         ray.init(num_cpus=num_cpus)
         self.num_cpus = num_cpus
@@ -187,7 +258,7 @@ class AdvancedPatchProcessor:
         self.index = 0
 
     def process_patches(self, text: str, patches: List[Patch]):
-        if self.bibtex_regex.search(text) is not None:
+        if not self.article_detector.is_probably_article(text):
             return
 
         patcher = diff_match_patch()
@@ -201,7 +272,7 @@ class AdvancedPatchProcessor:
         inverted_patch_objs = invert_patches(patch_objs)
         timestamps.reverse()
 
-        similar_patch_objs = group_similar_patches_by_timestamps(inverted_patch_objs, timestamps)
+        similar_patch_objs = group_similar_patches_by_timestamps_and_distance(inverted_patch_objs, timestamps)
 
         for patch_group in similar_patch_objs:
             text_before = self.patcher.patch_apply(patch_group, text)[0]

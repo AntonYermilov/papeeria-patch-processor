@@ -6,10 +6,8 @@ from dataclasses import dataclass
 from argparse import ArgumentParser
 from pathlib import Path
 from cosmas.generated.cosmas_pb2 import PatchList
-from diff_match_patch import diff_match_patch
 from processing.patch_processor import SimplePatchProcessor, AdvancedPatchProcessor
 from processing.selector import select_sentence_pairs
-from processing.metrics import NGramPerplexityScorer
 
 
 def install_dependencies():
