@@ -2,7 +2,7 @@ google-cloud-storage==1.25.0
 protobuf==3.11.3
 diff-match-patch==20181111
 cython==0.29.15
-numpy==1.18.1
+numpy==1.22.0
 nltk==3.4.5
 langdetect==1.0.8
 pycountry==19.8.18
