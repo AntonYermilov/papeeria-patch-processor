@@ -1,5 +1,5 @@
 google-cloud-storage==1.25.0
-protobuf==3.11.3
+protobuf==3.18.3
 diff-match-patch==20181111
 cython==0.29.15
 numpy==1.18.1
