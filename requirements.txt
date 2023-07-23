@@ -3,7 +3,7 @@ protobuf==3.11.3
 diff-match-patch==20181111
 cython==0.29.15
 numpy==1.18.1
-nltk==3.4.5
+nltk==3.6.6
 langdetect==1.0.8
 pycountry==19.8.18
 regex==2020.2.20
